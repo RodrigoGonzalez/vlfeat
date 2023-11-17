@@ -93,7 +93,7 @@ class MFile:
         self.path     = os.path.join(basedir, dirname, name)
         self.mdocname = funcname.replace(os.path.sep, '_')
         self.webname  = funcname.replace(os.path.sep, '.')
-        self.htmlname = self.mdocname + '.html'
+        self.htmlname = f'{self.mdocname}.html'
         self.wikiname = 'MDoc_' + (os.path.join(dirname, funcname)
                                    .upper().replace(os.path.sep, '_'))
 
@@ -109,11 +109,11 @@ class MFile:
         elif format == 'wiki':
             return self.wikiname
 
-    def getRef (self, format='html'):
+    def getRef(self, format='html'):
         if format == 'html':
             return self.htmlname
         elif format == 'web':
-            return '%pathto:' + self.webname + ';'
+            return f'%pathto:{self.webname};'
         elif format == 'wiki':
             return self.wikiname
 
@@ -153,15 +153,14 @@ class Node:
     def toIndexPage(self, format='html', depth=1):
         "Converts the node hierarchy rooted here into an index."
         page = ""
-        if format == 'html' or format == 'web':
+        if format in ['html', 'web']:
             if len(self.mfiles) > 0:
-                page += "<b>%s</b>" % (self.dirname.upper())
+                page += f"<b>{self.dirname.upper()}</b>"
                 page += "<ul>\n"
                 for m in self.mfiles:
                     page += "<li>"
-                    page += "<b><a href='%s'>%s</a></b>" % (m.getRef(format),
-                                                            m.funcname)
-                    page += " %s" % (m.brief)
+                    page += f"<b><a href='{m.getRef(format)}'>{m.funcname}</a></b>"
+                    page += f" {m.brief}"
                     page += "</li>"
                 page += "</ul>\n"
         elif format == 'wiki':
@@ -169,7 +168,7 @@ class Node:
                 if depth > 1:
                     page += "=== %s ===\n" % (self.dirname.upper())
                 for m in self.mfiles:
-                    page += "* [[%s|%s]]" % (m.getRef(format), m.funcname)
+                    page += f"* [[{m.getRef(format)}|{m.funcname}]]"
                     page += " %s\n" % (m.brief)
         elif format == 'helptoc':
             for m in self.mfiles:
@@ -220,8 +219,7 @@ def depth_first(node):
     """
     yield node
     for n in node.children:
-        for m in depth_first(n):
-            yield m
+        yield from depth_first(n)
     return
 
 # --------------------------------------------------------------------
@@ -258,7 +256,7 @@ def extract(path):
         body.append('%s\n' % line)
 
     # Extract header from body
-    if len(body) > 0:
+    if body:
         head  = body[0]
         body  = body[1:]
         match = re.match(r"^\s*(\w+)\s*(\S.*)\n$", head)
@@ -311,14 +309,15 @@ def xscan(baseDir, subDir=''):
 
 # --------------------------------------------------------------------
 def breadCrumb(m):
-# --------------------------------------------------------------------
-    breadcrumb = "<ul class='breadcrumb'>"
-    if format == 'web':
-        breadcrumb += "<li><a href='%pathto:matlab;'>Index</a></li>"
-    else:
-        breadcrumb += "<li><a href='index.html'>Index</a></li>"
-    if m.prev: breadcrumb += "<li><a href='%s'>Prev</a></li>" % m.prev.getRef(format)
-    if m.next: breadcrumb += "<li><a href='%s'>Next</a></li>" % m.next.getRef(format)
+    breadcrumb = "<ul class='breadcrumb'>" + (
+        "<li><a href='%pathto:matlab;'>Index</a></li>"
+        if format == 'web'
+        else "<li><a href='index.html'>Index</a></li>"
+    )
+    if m.prev:
+        breadcrumb += f"<li><a href='{m.prev.getRef(format)}'>Prev</a></li>"
+    if m.next:
+        breadcrumb += f"<li><a href='{m.next.getRef(format)}'>Next</a></li>"
     breadcrumb += "</ul>"
     #breadcrumb += "<span class='path'>%s</span>" % m.node.dirname.upper()
 

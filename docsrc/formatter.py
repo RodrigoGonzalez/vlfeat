@@ -88,22 +88,16 @@ def lex(line):
     hierarchy of types.
     """
 
-    # a blank line
-    match = re.match(r"\s*\n?$", line) ;
-    if match: return B()
-
-    # a line of the type '  content::inner_content'
-    match = re.match(r"(\s*)(.*)::(.*)\n?$", line)
-    if match:
+    if match := re.match(r"\s*\n?$", line):
+        return B()
+    if match := re.match(r"(\s*)(.*)::(.*)\n?$", line):
         x = DL()
         x.indent        = len(match.group(1))
         x.content       = match.group(2)
         x.inner_content = match.group(3)
         return x
 
-    # a line of the type '  - inner_contet'
-    match = re.match(r"(\s*)([-\*#]\s*)(\S.*)\n?$", line)
-    if match:
+    if match := re.match(r"(\s*)([-\*#]\s*)(\S.*)\n?$", line):
         x = BL()
         x.indent        = len(match.group(1))
         x.inner_content = match.group(3)
@@ -112,9 +106,7 @@ def lex(line):
         x.content       = x.bullet + x.inner_content
         return x
 
-    # a line of the type  '   content'
-    match = re.match(r"(\s*)(\S.*)\n?$", line)
-    if match:
+    if match := re.match(r"(\s*)(\S.*)\n?$", line):
         x = PL()
         x.indent  = len(match.group(1))
         x.content = match.group(2)
@@ -136,15 +128,11 @@ class Lexer(object):
     def __init__(self, lines):
         self.tokens = []
         self.pos    = -1
-        for line in lines:
-            self.tokens.append(lex(line))
+        self.tokens.extend(lex(line) for line in lines)
 
     def next(self):
         self.pos = self.pos + 1
-        if self.pos >= len(self.tokens):
-            return E()
-        else:
-            return self.tokens [self.pos]
+        return E() if self.pos >= len(self.tokens) else self.tokens [self.pos]
 
     def seek(self, pos):
         self.pos = pos
@@ -159,10 +147,10 @@ class Lexer(object):
         return self.pos
 
     def __str__(self):
-        str = ""
-        for i,t in enumerate(self.tokens):
-             str += "%5d) %s %s\n" % (i, t.__class__.__name__,t.content)
-        return str
+        return "".join(
+            "%5d) %s %s\n" % (i, t.__class__.__name__, t.content)
+            for i, t in enumerate(self.tokens)
+        )
 
 # --------------------------------------------------------------------
 class Formatter:
@@ -221,13 +209,6 @@ class Formatter:
                            r'</a>'
                            r')',s)
 
-                           # r'(?P<page>[a-zA-Z0-9_]*)'
-                           # r')', s)
-
-
-
-                           # r')', s)
-
         for i in iter:
             func_name = i.group("function")
             page_name = i.group("page")
@@ -243,10 +224,10 @@ class Formatter:
                     # add link to function
                     atag = self.xmldoc.createElement(u"a")
                     self.addText(atag, i.group('function'))
-                    atag.setAttribute(u"href", u"%s" % (func_href))
+                    atag.setAttribute(u"href", f"{func_href}")
                     xs.append(atag)
                 elif self.linktype == 'wiki':
-                    linktxt = "[[%s|%s]]" % (func_href, i.group('function'))
+                    linktxt = f"[[{func_href}|{i.group('function')}]]"
                     xs.append(self.toTextNode(linktxt))
 
                 # set head
@@ -263,10 +244,10 @@ class Formatter:
                     # add link to function
                     atag = self.xmldoc.createElement(u"a")
                     self.addText(atag, i.group('text'))
-                    atag.setAttribute(u"href", u"%s" % (page_href))
+                    atag.setAttribute(u"href", f"{page_href}")
                     xs.append(atag)
                 elif self.linktype == 'wiki':
-                    linktxt = "[[%s|%s]]" % (func_href, i.group('function'))
+                    linktxt = f"[[{func_href}|{i.group('function')}]]"
                     xs.append(self.toTextNode(linktxt))
 
                 # set head
@@ -300,29 +281,24 @@ class Formatter:
             x = self.parse_Terminal(B)
             if x: continue
 
-            x = self.parse_P(indent)
-            if x:
+            if x := self.parse_P(indent):
                 xs.append(x)
                 continue
 
-            x = self.parse_V(indent)
-            if x:
+            if x := self.parse_V(indent):
                 xs.append(x)
                 continue
 
-            x = self.parse_UL(indent)
-            if x:
+            if x := self.parse_UL(indent):
                 xs.append(x)
                 continue
 
-            x = self.parse_DL(indent)
-            if x:
+            if x := self.parse_DL(indent):
                 xs.append(x)
                 continue
 
             break
-        if len(xs) == 0: return None
-        return xs
+        return None if not xs else xs
 
     # ................................................................
     # P(N) -> PL(N) L(N)*
@@ -331,9 +307,7 @@ class Formatter:
         good = False
         pos = self.tokens.getpos()
 
-        # Introduced by PL
-        x = self.parse_Terminal(PL)
-        if x:
+        if x := self.parse_Terminal(PL):
             if x.indent == indent:
                 content += x.content + "\n"
                 good = True
@@ -344,8 +318,7 @@ class Formatter:
 
         # Continued by zero or more L
         while True:
-            x = self.parse_Terminal(L)
-            if x:
+            if x := self.parse_Terminal(L):
                 if x.indent == indent:
                     content += x.content + "\n"
                     good = True
@@ -365,16 +338,14 @@ class Formatter:
         good = False
         pos = self.tokens.getpos()
         while True:
-            x = self.parse_Terminal(L)
-            if x:
+            if x := self.parse_Terminal(L):
                 if x.indent > indent:
                     content += " "*(x.indent - indent) + x.content + "\n"
                     good = True
                     continue
                 else:
                     self.tokens.back()
-            x = self.parse_Terminal(B)
-            if x:
+            if x := self.parse_Terminal(B):
                 content += "\n"
                 continue
             break
@@ -393,12 +364,11 @@ class Formatter:
     def parse_UL(self, indent):
         xs = []
         while True:
-            x = self.parse_ULI(indent)
-            if x:
+            if x := self.parse_ULI(indent):
                 xs.append(x)
                 continue
             break
-        if len(xs) == 0: return None
+        if not xs: return None
         ultag = self.xmldoc.createElement("ul")
         for x in xs:
             ultag.appendChild(x)
@@ -411,9 +381,7 @@ class Formatter:
         good = False
         pos = self.tokens.getpos()
 
-        # Introduced by UL
-        x = self.parse_Terminal(BL)
-        if x:
+        if x := self.parse_Terminal(BL):
             if x.indent == indent:
                 content += x.inner_content + "\n"
                 indent   = x.inner_indent
@@ -425,8 +393,7 @@ class Formatter:
 
         # Continued by zero or more L
         while True:
-            x = self.parse_Terminal(L)
-            if x:
+            if x := self.parse_Terminal(L):
                 if x.indent == indent:
                     content += x.content + "\n"
                     good = True
@@ -439,9 +406,7 @@ class Formatter:
         self.addFancyText(ptag, content)
         litag.appendChild(ptag)
 
-        # Continued by DIV
-        xs = self.parse_DIV(indent)
-        if xs:
+        if xs := self.parse_DIV(indent):
             for x in xs:
                 litag.appendChild(x)
 
@@ -453,8 +418,7 @@ class Formatter:
     def parse_DL(self, indent):
         xs = []
         while True:
-            x = self.parse_DI(indent)
-            if x:
+            if x := self.parse_DI(indent):
                 xs += x
                 continue
             break
@@ -470,8 +434,6 @@ class Formatter:
         content = "\n"
         good   = False
         pos    = self.tokens.getpos()
-        xs     = []
-
         # Introduced by DL
         x = self.parse_Terminal(DL)
         if x:
@@ -483,39 +445,17 @@ class Formatter:
         if not good:
             return None
 
-        if False:
-            # adds text after :: as part of the description dd
-            dttag = self.xmldoc.createElement(u"dt")
-            dttxt = self.toTextNode(content)
-            dttag.appendChild(dttxt)
-            xs.append(dttag)
-
-            # Inject inner_content
-            c = x.inner_content.strip()
-            if len(c) > 0:
-                tk = PL()
-                tk.content = x.inner_content
-                t = self.tokens.next()
-                self.tokens.back()
-                if t.isa(L) and t.indent > indent:
-                    tk.indent = t.indent
-                else:
-                    tk.indent = indent+1 ;
-                    self.tokens.rewrite(tk)
-                    self.tokens.back()
-        else:
-            # adds text after :: as part of the description term dt
-            dttag = self.xmldoc.createElement(u"dt")
-            dttxt = self.toTextNode(content)
-            dttag.appendChild(dttxt)
-            c = x.inner_content.strip()
-            if len(c) > 0:
-                deftag = self.xmldoc.createElement(u"span")
-                self.addAttr(deftag, "class", "defaults")
-                self.addText(deftag, c)
-                dttag.appendChild(deftag)
-            xs.append(dttag)
-
+        # adds text after :: as part of the description term dt
+        dttag = self.xmldoc.createElement(u"dt")
+        dttxt = self.toTextNode(content)
+        dttag.appendChild(dttxt)
+        c = x.inner_content.strip()
+        if len(c) > 0:
+            deftag = self.xmldoc.createElement(u"span")
+            self.addAttr(deftag, "class", "defaults")
+            self.addText(deftag, c)
+            dttag.appendChild(deftag)
+        xs = [dttag]
         # Continued by DIV
         t = self.tokens.next()
         self.tokens.back()

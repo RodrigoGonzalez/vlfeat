@@ -45,8 +45,8 @@ DOCTYPE_XHTML_TRANSITIONAL = \
 mapUnicodeToHtmlEntity = { }
 for k, v in htmlentitydefs.name2codepoint.items():
     c = unichr(v)
-    if c == u'&' or c == u'<' or c == u'>': continue
-    mapUnicodeToHtmlEntity [c] = "&%s;"  % k
+    if c in [u'&', u'<', u'>']: continue
+    mapUnicodeToHtmlEntity [c] = f"&{k};"
 
 # This indexes the document nodes by ID
 nodeIndex = { }
@@ -56,9 +56,10 @@ doxygenDir = ''
 
 def getDoxygenURL(tag):
     url = ''
-    rootURL = nodeIndex['root'].getPublishURL()
-    if rootURL: url += rootURL + '/'
-    if doxygenDir: url += doxygenDir + '/'
+    if rootURL := nodeIndex['root'].getPublishURL():
+        url += f'{rootURL}/'
+    if doxygenDir:
+        url += f'{doxygenDir}/'
     url += doxygenIndex.index[tag]
     return url
 
@@ -105,8 +106,8 @@ def calcRelURL(toURL, fromURL):
     """
     fromURL  = urlparse(fromURL)
     toURL    = urlparse(toURL)
-    if not fromURL.scheme == toURL.scheme: return urlunparse(toURL)
-    if not fromURL.netloc == toURL.netloc: return urlunparse(toURL)
+    if fromURL.scheme != toURL.scheme: return urlunparse(toURL)
+    if fromURL.netloc != toURL.netloc: return urlunparse(toURL)
 
     fromPath = fromURL.path.split("/")
     toPath   = toURL.path.split("/")
@@ -122,15 +123,13 @@ def calcRelURL(toURL, fromURL):
     while True:
         if i >= len(fromPath) - 1: break
         if i >= len(toPath) - 1: break
-        if not fromPath[i] == toPath[i]: break
+        if fromPath[i] != toPath[i]: break
         i = i + 1
 
     # a/b/c/d.html  --> ../../../d.html
     # a/b//c/d.html --> ../../../d.html
     for j in xrange(len(fromPath) - 1):
-        if len(fromPath[j]) > 1: fromPath[j] = u"../"
-        else:                    fromPath[j] = u""
-
+        fromPath[j] = u"../" if len(fromPath[j]) > 1 else u""
     fromPath = fromPath[i:-1]
     toPath = toPath[i:]
     relPath = u"".join(fromPath) + "".join(toPath)
@@ -141,18 +140,15 @@ def walkNodes(rootNode, nodeType = None, nodeBarrier = None):
     if nodeBarrier and rootNode.isA(nodeBarrier):
         return
     for n in rootNode.getChildren():
-        for m in walkNodes(n, nodeType, nodeBarrier):
-            yield m
+        yield from walkNodes(n, nodeType, nodeBarrier)
     if not nodeType or rootNode.isA(nodeType):
         yield rootNode
 
 def walkAncestors(leafNode, nodeType = None):
     if not nodeType or leafNode.isA(nodeType):
         yield leafNode
-    p = leafNode.getParent()
-    if p:
-        for m in walkAncestors(p, nodeType):
-            yield m
+    if p := leafNode.getParent():
+        yield from walkAncestors(p, nodeType)
 
 # --------------------------------------------------------------------
 class DocLocation:
@@ -181,13 +177,13 @@ class DocError(BaseException):
         self.locations = []
 
     def __str__(self):
-        str = ""
-        if len(self.locations) > 0:
-            for i in xrange(len(self.locations)-1,0,-1):
-                str += "included from %s:\n" % self.locations[i]
-            return str + "%s: error: %s" % (self.locations[0], BaseException.__str__(self))
-        else:
+        if len(self.locations) <= 0:
             return self.message
+        str = "".join(
+            "included from %s:\n" % self.locations[i]
+            for i in xrange(len(self.locations) - 1, 0, -1)
+        )
+        return f"{str}{self.locations[0]}: error: {BaseException.__str__(self)}"
 
     def appendLocation(self, location):
         self.locations.append(location)
@@ -263,10 +259,7 @@ class DocNode(DocBareNode):
         self.sourceURL = None
         self.sourceRow = None
         self.sourceColumn = None
-        if attrs.has_key('id'):
-            self.id = attrs['id']
-        else:
-            self.id = getUniqueNodeID()
+        self.id = attrs['id'] if attrs.has_key('id') else getUniqueNodeID()
         self.sourceURL = URL
         if locator:
             self.sourceRow = locator.getLineNumber()
@@ -274,7 +267,7 @@ class DocNode(DocBareNode):
         nodeIndex[self.id] = self
 
     def __str__(self):
-        return "%s:%s -> %s" % (self.getLocation(), self.getID(), self.getPublishURL())
+        return f"{self.getLocation()}:{self.getID()} -> {self.getPublishURL()}"
 
     def dump(self):
         """
@@ -312,10 +305,7 @@ class DocNode(DocBareNode):
         """
         Return the depth of the node in the tree.
         """
-        if self.parent:
-            return self.parent.getDepth() + 1
-        else:
-            return 0
+        return self.parent.getDepth() + 1 if self.parent else 0
 
     def setParent(self, parent):
         """
@@ -339,11 +329,8 @@ class DocNode(DocBareNode):
         if nodeType is None:
             nodeType = DocNode
         if self.parent:
-            if self.parent.isA(nodeType):
-                found = [self.parent]
-            else:
-                found = []
-            found = found + self.parent.findAncestors(nodeType)
+            found = [self.parent] if self.parent.isA(nodeType) else []
+            found += self.parent.findAncestors(nodeType)
             return found
         return []
 
@@ -375,9 +362,7 @@ class DocNode(DocBareNode):
         """
         Returns the publish dir name of the parent.
         """
-        if self.parent:
-            return self.parent.getPublishDirName()
-        return None
+        return self.parent.getPublishDirName() if self.parent else None
 
     def getPublishFileName(self):
         """
@@ -504,8 +489,7 @@ class DocInclude(DocNode):
         self.filePath = attrs["src"]
 
     def __str__(self):
-        return DocNode.__str__(self) + ":<web:include src=%s>" \
-            % xml.sax.saxutils.quoteattr(self.filePath)
+        return f"{DocNode.__str__(self)}:<web:include src={xml.sax.saxutils.quoteattr(self.filePath)}>"
 
 # --------------------------------------------------------------------
 class DocDir(DocNode):
@@ -517,8 +501,7 @@ class DocDir(DocNode):
         self.dirName = attrs["name"]
 
     def __str__(self):
-        return DocNode.__str__(self) + ":<web:dir name=%s>" \
-            % xml.sax.saxutils.quoteattr(self.dirName)
+        return f"{DocNode.__str__(self)}:<web:dir name={xml.sax.saxutils.quoteattr(self.dirName)}>"
 
     def getPublishDirName(self):
         return self.parent.getPublishDirName() + self.dirName + os.sep
@@ -535,7 +518,7 @@ class DocGroup(DocNode):
         DocNode.__init__(self, attrs, URL, locator)
 
     def __str__(self):
-        return DocNode.__str__(self) + ":<web:group>"
+        return f"{DocNode.__str__(self)}:<web:group>"
 
 # --------------------------------------------------------------------
 class DocCDATAText(DocBareNode):
@@ -545,7 +528,7 @@ class DocCDATAText(DocBareNode):
         self.text = text
 
     def __str__(self):
-        return DocNode.__str__(self) + ":CDATA text:" + self.text
+        return f"{DocNode.__str__(self)}:CDATA text:{self.text}"
 
     def publish(self, gen, pageNode = None):
         gen.putString(self.text)
@@ -557,7 +540,7 @@ class DocCDATA(DocNode):
         DocNode.__init__(self, {}, None, None)
 
     def __str__(self):
-        return DocNode.__str__(self) + ":CDATA"
+        return f"{DocNode.__str__(self)}:CDATA"
 
     def publish(self, gen, pageNode = None):
         gen.putString("<![CDATA[")
@@ -574,8 +557,10 @@ class DocHtmlText(DocBareNode):
         self.text = text
 
     def __str__(self):
-        return DocNode.__str__(self) + ":text:'" + \
-            self.text.encode('utf-8').encode('string_escape') + "'"
+        return (
+            f"{DocNode.__str__(self)}:text:'"
+            + self.text.encode('utf-8').encode('string_escape')
+        ) + "'"
 
     def publish(self, gen, pageNode = None):
         # find occurences of %directive; in the text node and do the
@@ -660,8 +645,10 @@ class DocCodeText(DocBareNode):
         self.text = text
 
     def __str__(self):
-        return DocNode.__str__(self) + ":text:'" + \
-            self.text.encode('utf-8').encode('string_escape') + "'"
+        return (
+            f"{DocNode.__str__(self)}:text:'"
+            + self.text.encode('utf-8').encode('string_escape')
+        ) + "'"
 
 # --------------------------------------------------------------------
 class DocCode(DocNode):
@@ -674,9 +661,9 @@ class DocCode(DocNode):
     def __str__(self):
         str = "<web:precode"
         for k, v in self.attrs.items():
-            str = str + " " + k + "='" + xml.sax.saxutils.escape(v) + "'"
-            str = str + "> type = " + self.type
-        return DocNode.__str__(self) + ":" + str
+            str = f"{str} {k}='{xml.sax.saxutils.escape(v)}'"
+            str = f"{str}> type = {self.type}"
+        return f"{DocNode.__str__(self)}:{str}"
 
     def publish(self, gen, pageNode = None):
         code = ""
@@ -706,23 +693,21 @@ class DocHtmlElement(DocNode):
         self.tag = tag
 
     def __str__(self):
-        str = "<html:" + self.tag
+        str = f"<html:{self.tag}"
         for k, v in self.attrs.items():
-            str = str + " " + k + "='" + xml.sax.saxutils.escape(v) + "'"
-        str = str + ">"
-        return DocNode.__str__(self) + ":" + str
+            str = f"{str} {k}='{xml.sax.saxutils.escape(v)}'"
+        str = f"{str}>"
+        return f"{DocNode.__str__(self)}:{str}"
 
     def getPublishURL(self):
         anc = self.findAncestors(DocPage)
-        if len(anc) == 0: return None
-        return anc[0].getPublishURL() + "#" + self.id
+        return None if len(anc) == 0 else f"{anc[0].getPublishURL()}#{self.id}"
 
     def publish(self, gen, pageNode = None):
         gen.putString("<")
         gen.putString(self.tag)
         # make sure headings have and id (for ToCs)
-        if self.tag in ['h1', 'h2', 'h3', 'h4', 'h5'] and \
-           not "id" in self.attrs:
+        if self.tag in ['h1', 'h2', 'h3', 'h4', 'h5'] and "id" not in self.attrs:
             self.attrs["id"] = self.id ;
         for name, value in self.attrs.items():
             gen.putString(" ")
@@ -830,27 +815,22 @@ class DocPage(DocNode):
         self.hide = False
 
         for k, v in self.attrs.items():
-            if k == 'src':
-                self.title = v
-            elif k == 'name':
-                self.name = v
+            if k == 'hide':
+                self.hide = (v.lower() == 'yes')
             elif k == 'id':
                 pass
-            elif k == 'title':
+            elif k == 'name':
+                self.name = v
+            elif k in ['src', 'title']:
                 self.title = v
-            elif k == 'hide':
-                self.hide = (v.lower() == 'yes')
             else:
-                raise DocError(
-                    "web:page cannot have '%s' attribute" % k)
+                raise DocError(f"web:page cannot have '{k}' attribute")
 
     def __str__(self):
-        return DocNode.__str__(self) + ":<web:page name='%s' title='%s'>" \
-            % (xml.sax.saxutils.escape(self.name),
-               xml.sax.saxutils.escape(self.title))
+        return f"{DocNode.__str__(self)}:<web:page name='{xml.sax.saxutils.escape(self.name)}' title='{xml.sax.saxutils.escape(self.title)}'>"
 
     def getPublishFileName(self):
-        return self.name + ".html"
+        return f"{self.name}.html"
 
     def getPublishURL(self):
         siteNode = self.findAncestors(DocSite)[0]
@@ -877,10 +857,7 @@ class DocPage(DocNode):
     def publishIndex(self, gen, inPage, activePageNodes, full=False):
         if self.hide: return False
         active = (self in activePageNodes)
-        if active:
-            activeLeaf = (activePageNodes.index(self) == 0)#len(activePageNodes)-1)
-        else:
-            activeLeaf = False
+        activeLeaf = (activePageNodes.index(self) == 0) if active else False
         gen.putString("<li")
         if active: gen.putString(" class='active'")
         if activeLeaf: gen.putString(" class='activeLeaf'")
@@ -915,7 +892,7 @@ class DocSite(DocNode):
         self.outDir = "html"
 
     def __str__(self):
-        return DocNode.__str__(self) + ":<web:site>"
+        return f"{DocNode.__str__(self)}:<web:site>"
 
     def getPublishURL(self):
         return self.siteURL
@@ -1145,10 +1122,7 @@ class DocHandler(ContentHandler):
         self.locatorStack.append(locator)
 
     def getCurrentLocator(self):
-        if len(self.locatorStack) > 0:
-            return self.locatorStack[-1]
-        else:
-            return None
+        return self.locatorStack[-1] if len(self.locatorStack) > 0 else None
 
     def characters(self, content):
         """
@@ -1185,7 +1159,7 @@ class DocHandler(ContentHandler):
 
     def comment(self, body):
         if self.inDTD: return
-        node = DocCDATAText("<!--" + body + "-->")
+        node = DocCDATAText(f"<!--{body}-->")
         self.stack[-1].adopt(node)
 
     def startEntity(self, name): pass

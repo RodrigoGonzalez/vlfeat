@@ -32,10 +32,7 @@ class Doxytag:
         self.xBuildIndex(dom)
 
     def getText(self, nodelist):
-        rc = []
-        for node in nodelist:
-            if node.nodeType == node.TEXT_NODE:
-                rc.append(node.data)
+        rc = [node.data for node in nodelist if node.nodeType == node.TEXT_NODE]
         return ''.join(rc)
 
     def xBuildIndex(self, node):
@@ -45,7 +42,7 @@ class Doxytag:
                 filename=node.getAttribute("file")
                 if os.path.splitext(filename)[1] != '.html':
                         filename += '.html'
-                self.index[anchor] = filename + "#" + anchor
+                self.index[anchor] = f"{filename}#{anchor}"
             # do filenames
             filename = node.getElementsByTagName("filename")
             if filename.length > 0:
@@ -54,7 +51,7 @@ class Doxytag:
                     s1 = self.getText(name[0].childNodes)
                     s2 = self.getText(filename[0].childNodes)
                     if os.path.splitext(s2)[1] != '.html':
-                        s2 = s2 + '.html'
+                        s2 = f'{s2}.html'
                     self.index[s1] = s2
 
         for x in node.childNodes:
